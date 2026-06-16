@@ -11,14 +11,13 @@ outfits from items you like — powered by **FashionCLIP** embeddings and **FAIS
 
 ## What it does
 
-The app has four ways to explore the catalog:
+The app has five ways to explore the catalog:
 
 - **Image Search** — upload a photo of a clothing item and retrieve visually similar products.
 - **Text Search** — describe what you want in plain language (e.g. *"black oversized t-shirt"*) and get matching products.
+- **Smart Search** — combine a reference image with a text tweak in one query (e.g. upload a jacket and add *"but in black"*), with category filtering and a diversity toggle. Either input also works on its own.
 - **Pick & Build Outfit** — search, click the items you like (they persist across searches), and get matching alternatives plus complementary pieces other shoppers bought together, so you can assemble a full outfit.
 - **Your Wardrobe** — upload a few photos of clothes you own and optionally describe your style, to get recommendations tuned to your taste.
-
----
 
 ## Why FashionCLIP
 
@@ -45,19 +44,24 @@ logic) stayed identical, which isolated the embedding model as the real quality 
 indexed with FAISS (`IndexFlatIP` over L2-normalized vectors, so inner product equals cosine
 similarity). An image query is encoded with FashionCLIP's vision encoder; a text query with its
 text encoder — both are matched against the **same** image index, since CLIP places images and
-text in a shared space.
+text in a shared space. A combined query (Smart Search) averages the normalized image and text
+vectors and re-normalizes, so a text phrase can steer an image result (e.g. the same garment in
+a different color). Results can optionally be diversified with an MMR rerank that trades off
+similarity to the query against redundancy between results, so one query doesn't return a row of
+near-duplicates.
 
 **Outfit building.** For each liked item, the app combines two signals: visually similar items
-in the same garment category, and items frequently **bought together** with it (co-occurrence
-mined from transaction baskets). The mix surfaces both alternatives and complementary pieces.
+in the same garment category (FAISS), and items frequently **bought together** with it
+(co-occurrence mined from transaction baskets). Co-occurrence is filtered to cut noise — weak
+pairs are dropped with a minimum-count threshold, only the top co-occurring items per article
+are kept, and matches are restricted to *different* garment categories so they act as genuine
+complements while the visual signal covers same-category alternatives.
 
 **Purchase prediction (Kaggle benchmark).** A separate pipeline predicts the next items a
 customer will buy, blending recency-weighted repurchase, item co-occurrence, visual similarity,
 and popularity. It scores **MAP@12 ≈ 0.021** on the Kaggle H&M benchmark (1.37M customers) —
 roughly double a popularity-only baseline. The repurchase signal does most of the work; this is
 documented as a clean, explainable baseline rather than a competition-tuned solution.
-
----
 
 ## The Dataset & Competition
 
