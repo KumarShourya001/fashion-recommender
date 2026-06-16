@@ -28,6 +28,7 @@ PER_ITEM = 4
 NEIGHBOR_POOL = 200
 PICK_POOL = 60
 PICK_PAGE = 12
+GALLERY_HEIGHT = 520
 IMG_DIR = "/tmp/images"
 
 # guidance shown on the image-upload tabs so users get good results
@@ -124,28 +125,31 @@ def search_by_text(query_text):
 
 # --------------------------- smart multimodal search ---------------------
 
-def mmr_rerank(query_vec, candidate_rows, k, diversity=0.5):
-    # rerank to balance relevance to the query against variety, so results
-    # are not a row of near-identical items
+def mmr_rerank(query_vec, candidate_rows, k, diversity=0.3):
+    """
+    Maximal Marginal Relevance: pick results that are relevant to the query
+    while avoiding near-duplicates. Low diversity keeps results close to the
+    query with only light variety. Indexed by position for clarity.
+    """
     if not candidate_rows:
         return []
     cand = np.array(candidate_rows)
     cand_embs = embeddings[cand]
     query_sim = cand_embs @ query_vec.reshape(-1)
-    chosen = []
-    chosen_mask = np.zeros(len(cand), dtype=bool)
+    chosen_idx = []
     k = min(k, len(cand))
-    while len(chosen) < k:
-        if not chosen:
+    while len(chosen_idx) < k:
+        if not chosen_idx:
             pick = int(np.argmax(query_sim))
         else:
-            redundancy = (cand_embs @ cand_embs[chosen_mask].T).max(axis=1)
+            chosen_embs = cand_embs[chosen_idx]
+            redundancy = (cand_embs @ chosen_embs.T).max(axis=1)
             score = (1 - diversity) * query_sim - diversity * redundancy
-            score[chosen_mask] = -np.inf
+            for ci in chosen_idx:
+                score[ci] = -np.inf
             pick = int(np.argmax(score))
-        chosen.append(int(cand[pick]))
-        chosen_mask[pick] = True
-    return chosen
+        chosen_idx.append(pick)
+    return [int(cand[i]) for i in chosen_idx]
 
 def smart_search(pil_image, query_text, category, result_count, diversify):
     result_count = int(result_count)
@@ -234,6 +238,11 @@ def cooccurrence_items(row):
     return [article_to_row[c] for c in co_ids if c in article_to_row]
 
 def build_outfit(liked_rows, page):
+    """
+    For each liked item, suggest up to PER_ITEM pieces: co-occurring items
+    (complementary pieces people bought together) first, then topped up with
+    same-category visual matches. Grouped by category for a clean grid.
+    """
     if not liked_rows:
         return []
     suggestions = []
@@ -244,7 +253,7 @@ def build_outfit(liked_rows, page):
         complementary = cooccurrence_items(r)
         per_item_added = 0
 
-        # try 2 co-occurring (complementary) items first
+        # complementary (co-occurring) items first
         if complementary:
             start_c = (page * 2) % len(complementary)
             off = 0
@@ -255,7 +264,7 @@ def build_outfit(liked_rows, page):
                     suggestions.append(cand); seen.add(aid); per_item_added += 1
                 off += 1
 
-        # fill the rest (up to PER_ITEM) with same-category visual matches
+        # top up with same-category visual matches
         if visual:
             start_v = (page * PER_ITEM) % len(visual)
             off = 0
@@ -338,7 +347,8 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
                 image_input = gr.Image(type="pil", label="Your image")
                 image_button = gr.Button("Find Similar Products", variant="primary")
             with gr.Column(scale=2):
-                image_results = gr.Gallery(label="Similar Products", columns=4, height="auto")
+                image_results = gr.Gallery(label="Similar Products", columns=4,
+                                           height=GALLERY_HEIGHT, object_fit="contain")
         image_button.click(search_by_image, inputs=image_input, outputs=image_results)
 
     with gr.Tab("Text Search"):
@@ -352,7 +362,8 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
             inputs=text_input,
         )
         text_button = gr.Button("Search", variant="primary")
-        text_results = gr.Gallery(label="Matching Products", columns=4, height="auto")
+        text_results = gr.Gallery(label="Matching Products", columns=4,
+                                  height=GALLERY_HEIGHT, object_fit="contain")
         text_button.click(search_by_text, inputs=text_input, outputs=text_results)
 
     with gr.Tab("Smart Search"):
@@ -369,10 +380,11 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
                                         placeholder="e.g. same style but in red")
                 smart_category = gr.Dropdown(category_choices, value="All", label="Category")
                 smart_count = gr.Slider(4, 24, value=TOP_K, step=4, label="Number of results")
-                smart_diversify = gr.Checkbox(value=True, label="Diversify results")
+                smart_diversify = gr.Checkbox(value=False, label="Diversify results")
                 smart_button = gr.Button("Search", variant="primary")
             with gr.Column(scale=2):
-                smart_results = gr.Gallery(label="Results", columns=4, height="auto")
+                smart_results = gr.Gallery(label="Results", columns=4,
+                                           height=GALLERY_HEIGHT, object_fit="contain")
         smart_button.click(
             smart_search,
             inputs=[smart_image, smart_text, smart_category, smart_count, smart_diversify],
@@ -396,7 +408,8 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
             pick_search_input = gr.Textbox(label="Search products", placeholder="e.g. denim jacket", scale=4)
             pick_search_button = gr.Button("Search", variant="primary", scale=1)
 
-        pick_gallery = gr.Gallery(label="Click items you like", columns=6, height="auto", allow_preview=False)
+        pick_gallery = gr.Gallery(label="Click items you like", columns=6,
+                                  height=GALLERY_HEIGHT, object_fit="contain", allow_preview=False)
         liked_display = gr.Markdown(liked_summary([]))
 
         with gr.Row():
@@ -405,7 +418,8 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
             shuffle_button = gr.Button("Shuffle Suggestions")
             clear_button = gr.Button("Clear Selections")
 
-        outfit_results = gr.Gallery(label="Outfit Suggestions", columns=4, height="auto")
+        outfit_results = gr.Gallery(label="Outfit Suggestions", columns=4,
+                                    height=GALLERY_HEIGHT, object_fit="contain")
 
         pick_search_button.click(
             lambda q: search_for_picking(q, 0),
@@ -440,7 +454,8 @@ with gr.Blocks(title="Multimodal Fashion Recommender", theme=theme) as demo:
                                          placeholder="e.g. minimal, neutral colors, casual")
                 wardrobe_button = gr.Button("Get Recommendations", variant="primary")
             with gr.Column(scale=2):
-                wardrobe_results = gr.Gallery(label="Recommended For You", columns=4, height="auto")
+                wardrobe_results = gr.Gallery(label="Recommended For You", columns=4,
+                                              height=GALLERY_HEIGHT, object_fit="contain")
         wardrobe_button.click(recommend_from_wardrobe,
                               inputs=[wardrobe_input, style_input], outputs=wardrobe_results)
 
