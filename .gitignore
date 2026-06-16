@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Data & large artifacts (hosted on Hugging Face, not in git)
+*.npy
+*.parquet
+*.zip
+*.csv
+data/
+images_extracted/
+embeddings/
+
+# Model / cache
+*.bin
+.cache/
+
+# Environment
+.env
+venv/
+.venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

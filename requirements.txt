@@ -1,0 +1,8 @@
+torch
+transformers
+faiss-cpu
+gradio>=4.0
+pandas
+numpy
+pillow
+huggingface_hub
