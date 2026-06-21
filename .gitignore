@@ -12,7 +12,6 @@ __pycache__/
 *.zip
 *.csv
 top_cooc.json
-data/
 images_extracted/
 embeddings/
 
