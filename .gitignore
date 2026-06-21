@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Jupyter
 .ipynb_checkpoints/
 
 # Data & large artifacts (hosted on Hugging Face, not in git)
@@ -9,6 +11,7 @@ __pycache__/
 *.parquet
 *.zip
 *.csv
+top_cooc.json
 data/
 images_extracted/
 embeddings/
@@ -21,6 +24,7 @@ embeddings/
 .env
 venv/
 .venv/
+env/
 
 # OS / editor
 .DS_Store
